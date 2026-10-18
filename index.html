@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="ja">
   <head>
@@ -5,44 +6,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f5f2ec" />
     <meta name="description" content="PDFを見開きとページめくりで確認できる、ブラウザー内の冊子プレビュー。" />
-    <title>Folio — 冊子プレビュー</title>
+    <title>冊子Checker</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app" id="app">
       <header class="topbar">
-        <div class="brand" aria-label="Folio 冊子プレビュー">
+        <div class="brand" aria-label="冊子Checker">
           <span class="brand-mark" aria-hidden="true"><span></span><span></span></span>
-          <span class="brand-name">Folio</span>
-          <span class="brand-sub">冊子プレビュー</span>
+          <span class="brand-name">冊子Checker</span>
+        </div>
+        <div class="document-info" id="documentInfo" hidden>
+          <strong id="documentName">冊子</strong>
+          <span id="documentMeta">1ページ</span>
         </div>
         <div class="topbar-actions">
-          <span class="privacy-note" id="privacyNote">PDFはこのブラウザー内で開きます</span>
+          <div class="view-actions" id="viewActions" hidden>
+            <button class="icon-button" id="zoomOut" type="button" aria-label="縮小" title="縮小"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+            <span class="zoom-value" id="zoomValue">100%</span>
+            <button class="icon-button" id="zoomIn" type="button" aria-label="拡大" title="拡大"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
+            <button class="icon-button fit-button" id="zoomFit" type="button" aria-label="全体表示" title="全体表示"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
+          </div>
           <button class="icon-button search-toggle" id="searchToggle" type="button" aria-label="文字を検索" title="文字を検索" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
           </button>
-          <button class="upload-button" id="uploadButton" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m0 0L7 8m5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg><span>PDFを開く</span></button>
+          <button class="icon-button upload-button" id="uploadButton" type="button" aria-label="PDFファイルを開く" title="PDFファイルを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9l5 5v13H5zM14 3v5h5"/></svg></button>
           <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
         </div>
       </header>
 
       <main class="workspace" id="workspace">
-        <div class="workspace-head" id="workspaceHead" hidden>
-          <div class="document-info">
-            <span class="eyebrow">READING PREVIEW</span>
-            <h1 id="documentName">冊子</h1>
-            <p id="documentMeta">1ページ</p>
-          </div>
-          <div class="view-actions">
-            <span class="view-label" id="spreadLabel">表紙 · 1ページ</span>
-            <span class="action-divider" aria-hidden="true"></span>
-            <button class="icon-button" id="zoomOut" type="button" aria-label="縮小" title="縮小"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-            <span class="zoom-value" id="zoomValue">100%</span>
-            <button class="icon-button" id="zoomIn" type="button" aria-label="拡大" title="拡大"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
-            <button class="fit-button" id="zoomFit" type="button">全体表示</button>
-          </div>
-        </div>
-
         <section class="reader" id="reader" aria-label="冊子プレビュー">
           <div class="empty-state" id="emptyState">
             <div class="empty-illustration" aria-hidden="true"><span class="empty-page left"></span><span class="empty-page right"></span><span class="empty-shadow"></span></div>
@@ -61,15 +54,15 @@
         </section>
 
         <nav class="pagination" id="pagination" aria-label="ページ移動" hidden>
-          <button class="page-button" id="prevButton" type="button" aria-label="前の見開きへ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg><span>戻る</span></button>
+          <button class="page-button" id="prevButton" type="button" aria-label="前の見開きへ" title="前の見開きへ"><span aria-hidden="true">←</span></button>
           <div class="scrubber">
-            <div class="scrubber-top"><span>ページを移動</span><span id="positionLabel">1 / 1</span></div>
+            <div class="scrubber-top"><span id="positionLabel">1 / 1</span></div>
             <div class="range-wrap" id="rangeWrap">
               <input id="pageRange" type="range" min="0" max="0" value="0" step="1" aria-label="表示する見開きを選択" />
               <div class="range-tooltip" id="rangeTooltip" hidden>表紙 · 1ページ</div>
             </div>
           </div>
-          <button class="page-button next" id="nextButton" type="button" aria-label="次の見開きへ"><span>進む</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+          <button class="page-button next" id="nextButton" type="button" aria-label="次の見開きへ" title="次の見開きへ"><span aria-hidden="true">→</span></button>
         </nav>
       </main>
 
