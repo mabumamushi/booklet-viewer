@@ -39,3 +39,7 @@
 @media(max-width:360px){.brand-name{font-size:15px}.brand{gap:5px}.view-actions .icon-button{width:27px}.zoom-value{min-width:34px}.topbar-actions{gap:1px}}
 .empty-state{padding:16px}
 .empty-state .primary-button{min-width:190px}
+
+@font-face{font-family:'Makinas 4 Flat';src:url('./assets/Makinas-4-Flat.otf') format('opentype');font-style:normal;font-weight:400;font-display:swap}
+html,body,button,input,textarea,select,.brand-name,.search-head h2,.empty-state h1{font-family:'Makinas 4 Flat',sans-serif}
+html{font-synthesis:weight}
