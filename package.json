@@ -1,0 +1,14 @@
+{
+  "name": "booklet-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "node prepare-assets.mjs",
+    "build": "node build.mjs",
+    "test": "node --test page-model.test.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "5.6.205"
+  }
+}
