@@ -1,3 +1,4 @@
+
 import * as pdfjs from './vendor/pdf.min.mjs';
 import { makeReadingOrder, makeSpreads, spreadLabel, findSpreadIndex } from './page-model.js';
 
@@ -6,7 +7,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', imp
 const $ = id => document.getElementById(id);
 const ui = Object.fromEntries([
   'app','uploadButton','emptyUpload','fileInput','searchToggle','searchClose','searchPanel','searchForm','searchInput','searchSummary','searchResults',
-  'workspaceHead','documentName','documentMeta','spreadLabel','reader','emptyState','readerViewport','zoomShell','bookSurface','dropOverlay',
+  'documentInfo','documentName','documentMeta','viewActions','reader','emptyState','readerViewport','zoomShell','bookSurface','dropOverlay',
   'loadingOverlay','loadingText','toast','pagination','prevButton','nextButton','pageRange','positionLabel','rangeTooltip',
   'zoomIn','zoomOut','zoomFit','zoomValue'
 ].map(id => [id, $(id)]));
@@ -14,7 +15,7 @@ const ui = Object.fromEntries([
 const state = {
   pdf: null, fileName: '', pageOrder: [], spreads: [], currentIndex: 0, zoom: 1,
   pageWidth: 340, pageHeight: 480, imageCache: new Map(), pendingImages: new Map(),
-  navigationId: 0, loadId: 0, searchId: 0, imageEpoch: 0, isTurning: false, searchMatches: [], toastTimer: null,
+  navigationId: 0, loadId: 0, searchId: 0, imageEpoch: 0, isTurning: false, searchMatches: [], toastTimer: null, zoomTimer: null,
 };
 
 function showToast(message) {
@@ -153,7 +154,6 @@ function updateNavigation() {
   const index = state.currentIndex;
   const spread = state.spreads[index];
   const label = spreadLabel(spread);
-  ui.spreadLabel.textContent = label;
   ui.positionLabel.textContent = label;
   ui.pageRange.max = String(state.spreads.length - 1);
   ui.pageRange.value = String(index);
@@ -228,19 +228,29 @@ function updateZoom() {
   ui.zoomValue.textContent = `${Math.round(state.zoom * 100)}%`;
   ui.zoomOut.disabled = state.zoom <= 0.6;
   ui.zoomIn.disabled = state.zoom >= 2.5;
+  ui.readerViewport.classList.toggle('is-zoomed', state.zoom > 1);
   if (state.pdf) applyGeometry(state.spreads[state.currentIndex]);
 }
 
-function zoomBy(amount) {
-  state.zoom = Math.max(0.6, Math.min(2.5, Math.round((state.zoom + amount) * 100) / 100));
+function zoomTo(value) {
+  const next = Math.max(0.6, Math.min(2.5, Math.round(value * 100) / 100));
+  if (next === state.zoom) return;
+  ui.readerViewport.classList.add('zoom-animating');
+  clearTimeout(state.zoomTimer);
+  state.zoom = next;
   updateZoom();
+  state.zoomTimer = setTimeout(() => ui.readerViewport.classList.remove('zoom-animating'), 380);
+}
+
+function zoomBy(amount) {
+  zoomTo(state.zoom + amount);
 }
 
 function computePageSize() {
-  const availableWidth = Math.max(290, ui.readerViewport.clientWidth - 72);
-  const availableHeight = Math.max(300, ui.readerViewport.clientHeight - 62);
+  const availableWidth = Math.max(290, ui.readerViewport.clientWidth - 36);
+  const availableHeight = Math.max(300, ui.readerViewport.clientHeight - 36);
   const aspect = state.pdfAspect || 1.414;
-  state.pageWidth = Math.max(145, Math.min(490, availableWidth / 2, availableHeight / aspect));
+  state.pageWidth = Math.max(145, Math.min(700, availableWidth / 2, availableHeight / aspect));
   state.pageHeight = state.pageWidth * aspect;
 }
 
@@ -273,12 +283,15 @@ async function openPdf(file) {
     state.spreads = makeSpreads(state.pageOrder);
     state.currentIndex = 0;
     state.zoom = 1;
+    clearTimeout(state.zoomTimer);
+    ui.readerViewport.classList.remove('zoom-animating');
     const firstPage = await pdf.getPage(1);
     const viewport = firstPage.getViewport({ scale: 1 });
     state.pdfAspect = viewport.height / viewport.width;
     ui.emptyState.hidden = true;
     ui.readerViewport.hidden = false;
-    ui.workspaceHead.hidden = false;
+    ui.documentInfo.hidden = false;
+    ui.viewActions.hidden = false;
     ui.pagination.hidden = false;
     ui.searchToggle.disabled = false;
     ui.documentName.textContent = file.name.replace(/\.pdf$/i, '');
@@ -397,7 +410,7 @@ ui.prevButton.addEventListener('click', () => navigate(state.currentIndex - 1, t
 ui.nextButton.addEventListener('click', () => navigate(state.currentIndex + 1, true));
 ui.zoomOut.addEventListener('click', () => zoomBy(-0.25));
 ui.zoomIn.addEventListener('click', () => zoomBy(0.25));
-ui.zoomFit.addEventListener('click', () => { state.zoom = 1; updateZoom(); });
+ui.zoomFit.addEventListener('click', () => zoomTo(1));
 ui.pageRange.addEventListener('pointerdown', () => showRangeTooltip(Number(ui.pageRange.value)));
 ui.pageRange.addEventListener('input', () => showRangeTooltip(Number(ui.pageRange.value)));
 ui.pageRange.addEventListener('change', () => { navigate(Number(ui.pageRange.value), false); setTimeout(() => { ui.rangeTooltip.hidden = true; }, 1200); });
@@ -405,6 +418,56 @@ ui.pageRange.addEventListener('blur', () => { ui.rangeTooltip.hidden = true; });
 ui.searchToggle.addEventListener('click', () => setSearchOpen(ui.searchPanel.hidden));
 ui.searchClose.addEventListener('click', () => setSearchOpen(false));
 ui.searchForm.addEventListener('submit', event => { event.preventDefault(); searchDocument(ui.searchInput.value); });
+
+function finishSwipe(start, x, y) {
+  if (!start || !state.pdf || state.zoom > 1 || state.isTurning) return;
+  const deltaX = x - start.x;
+  const deltaY = y - start.y;
+  const threshold = Math.min(80, Math.max(55, ui.readerViewport.clientWidth * 0.12));
+  if (Math.abs(deltaX) < threshold || Math.abs(deltaX) < Math.abs(deltaY) * 1.4) return;
+  navigate(state.currentIndex + (deltaX < 0 ? 1 : -1), true);
+}
+
+let touchStart = null;
+ui.readerViewport.addEventListener('touchstart', event => {
+  touchStart = event.touches.length === 1 && state.zoom <= 1
+    ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+    : null;
+}, { passive: true });
+ui.readerViewport.addEventListener('touchmove', event => {
+  if (event.touches.length !== 1) touchStart = null;
+}, { passive: true });
+ui.readerViewport.addEventListener('touchend', event => {
+  if (event.changedTouches.length === 1) finishSwipe(touchStart, event.changedTouches[0].clientX, event.changedTouches[0].clientY);
+  touchStart = null;
+}, { passive: true });
+ui.readerViewport.addEventListener('touchcancel', () => { touchStart = null; });
+
+let mouseStart = null;
+ui.readerViewport.addEventListener('pointerdown', event => {
+  if (event.pointerType === 'mouse' && event.button === 0) mouseStart = { x: event.clientX, y: event.clientY };
+});
+ui.readerViewport.addEventListener('pointerup', event => {
+  if (event.pointerType === 'mouse') finishSwipe(mouseStart, event.clientX, event.clientY);
+  mouseStart = null;
+});
+ui.readerViewport.addEventListener('pointercancel', () => { mouseStart = null; });
+
+let wheelTravel = 0;
+let wheelResetTimer;
+let lastWheelTurn = 0;
+ui.readerViewport.addEventListener('wheel', event => {
+  if (!state.pdf || state.zoom > 1 || event.ctrlKey || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+  event.preventDefault();
+  if (Date.now() - lastWheelTurn < 850) return;
+  wheelTravel += event.deltaX;
+  clearTimeout(wheelResetTimer);
+  wheelResetTimer = setTimeout(() => { wheelTravel = 0; }, 180);
+  if (Math.abs(wheelTravel) < 75) return;
+  navigate(state.currentIndex + (wheelTravel > 0 ? 1 : -1), true);
+  wheelTravel = 0;
+  lastWheelTurn = Date.now();
+}, { passive: false });
 
 document.addEventListener('keydown', event => {
   if (!state.pdf) return;
