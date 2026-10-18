@@ -34,6 +34,7 @@ python3 -m http.server 8000
 - `main.js` — PDF読み込み、描画、移動、検索
 - `page-model.js` — PDFページ番号から見開きへの対応
 - `prepare-assets.mjs`、`build.mjs` — PDF.jsの資産準備と静的サイトの生成
+- `assets/Makinas-4-Flat.otf` — 画面表示に使うフォント
 - `vendor/` — PDF.js 5.6.205（Apache License 2.0）とその同梱資産。`npm install` で生成され、Git管理には含まれません
 
 ページの並び替えは、今後 `pageOrder` の順番を編集するUIを加える設計です。`page-model.js` はその順番から見開きを組み立てます。
