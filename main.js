@@ -165,10 +165,13 @@ function updateNavigation() {
 }
 
 function makeAnimationScene(from, to, direction) {
-  const scene = document.createElement('div');
-  scene.className = `animation-scene ${direction}`;
   const source = state.spreads[from];
   const target = state.spreads[to];
+  if (source.kind !== 'spread' || target.kind !== 'spread') {
+    return makeBoundaryScene(source, target, direction);
+  }
+  const scene = document.createElement('div');
+  scene.className = `animation-scene ${direction}`;
   const sourceLeft = source.kind === 'spread' ? source.pages[0] : null;
   const sourceRight = source.kind === 'spread' ? source.pages[1] : null;
   const targetLeft = target.kind === 'spread' ? target.pages[0] : null;
@@ -190,6 +193,27 @@ function makeAnimationScene(from, to, direction) {
   }
   sheet.append(front, back);
   scene.append(left, right, sheet);
+  return scene;
+}
+
+function makeBoundaryScene(source, target, direction) {
+  const scene = document.createElement('div');
+  const transition = source.kind === 'cover' && target.kind === 'spread' ? 'cover-to-spread'
+    : source.kind === 'spread' && target.kind === 'cover' ? 'spread-to-cover'
+      : source.kind === 'spread' && target.kind === 'back' ? 'spread-to-back'
+        : source.kind === 'back' && target.kind === 'spread' ? 'back-to-spread'
+          : `single-to-single ${direction}`;
+  scene.className = `boundary-scene ${transition}`;
+  for (const [role, spread] of [['source', source], ['target', target]]) {
+    const layer = document.createElement('div');
+    layer.className = `boundary-layer ${role} ${spread.kind === 'spread' ? 'double' : 'single'}`;
+    if (spread.kind === 'spread') {
+      layer.append(pageNode(spread.pages[0]), pageNode(spread.pages[1]));
+    } else {
+      layer.append(pageNode(spread.pages[0], spread.kind === 'cover' ? 'cover' : 'back-cover'));
+    }
+    scene.append(layer);
+  }
   return scene;
 }
 
@@ -299,7 +323,7 @@ async function openPdf(file) {
     ui.searchPanel.hidden = true;
     ui.app.classList.remove('search-open');
     ui.searchInput.value = '';
-    ui.searchSummary.textContent = 'PDF内の文字を検索できます。';
+    ui.searchSummary.textContent = '';
     ui.searchResults.replaceChildren();
     computePageSize();
     updateZoom();
@@ -353,7 +377,7 @@ async function searchDocument(query) {
   ui.searchResults.replaceChildren();
   state.searchMatches = [];
   if (!needle || !state.pdf) {
-    ui.searchSummary.textContent = 'PDF内の文字を検索できます。';
+    ui.searchSummary.textContent = '';
     return;
   }
   ui.searchSummary.textContent = '検索中…';
@@ -375,7 +399,7 @@ async function searchDocument(query) {
     }
     if (id !== state.searchId) return;
     state.searchMatches = matches;
-    ui.searchSummary.textContent = matches.length ? `${matches.length}件見つかりました${matches.length >= 300 ? '（先頭300件）' : ''}` : '一致する文字は見つかりませんでした。';
+    ui.searchSummary.textContent = `${matches.length}件`;
     for (const match of matches) {
       const button = document.createElement('button');
       button.type = 'button';
