@@ -1,4 +1,5 @@
-export const INK_COLORS = ['#c63f35', '#3869a6', '#387252', '#e5bc35'];
+export const INK_COLORS = ['#202020', '#c63f35', '#3869a6'];
+const SAVED_INK_COLORS = new Set([...INK_COLORS, '#387252', '#e5bc35']);
 
 export function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -45,7 +46,7 @@ export function readSavedPages(record, pageCount) {
     if (!Number.isInteger(page) || page < 1 || page > pageCount || !Array.isArray(strokes)) continue;
     const valid = strokes.filter(stroke =>
       ['pen', 'marker'].includes(stroke?.tool) &&
-      INK_COLORS.includes(stroke.color) &&
+      SAVED_INK_COLORS.has(stroke.color) &&
       Number.isFinite(stroke.width) && stroke.width > 0 && stroke.width < 0.1 &&
       Array.isArray(stroke.points) && stroke.points.length > 0 && stroke.points.length < 100000 &&
       stroke.points.every(point => Number.isFinite(point?.x) && Number.isFinite(point?.y) && point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1)

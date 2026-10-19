@@ -90,6 +90,8 @@ html{font-synthesis:weight}
 .ink-toolbar{position:absolute;top:12px;left:12px;z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);min-height:48px;padding:5px 8px;background:#fffdf9f2;border:1px solid #dce3d8;border-radius:10px;box-shadow:0 5px 20px #24362722;overflow-x:auto;white-space:nowrap;backdrop-filter:blur(8px)}
 .ink-tool-group,.ink-colors{display:flex;align-items:center;gap:3px;flex:none}
 .ink-tool,.ink-action{height:34px;border:0;border-radius:7px;background:transparent;color:#47584a;font-size:12px;padding:0 10px}
+.ink-tool{width:36px;padding:0;display:grid;place-items:center}
+.ink-tool svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .ink-tool.active{background:#405e49;color:white}
 .ink-tool:disabled,.ink-action:disabled{opacity:.4}
 .ink-action{font-size:23px;min-width:35px;padding:0}
@@ -97,12 +99,10 @@ html{font-synthesis:weight}
 .ink-colors{padding:0 4px;border-left:1px solid #e3e8df}
 .ink-color{width:27px;height:27px;margin:0 2px;border:2px solid white;border-radius:50%;background:var(--ink-color);box-shadow:0 0 0 1px #cfd8cd}
 .ink-color.selected{box-shadow:0 0 0 2px #385d42}
+.ink-color[data-ink-color="#202020"]{--ink-color:#202020}
 .ink-color[data-ink-color="#c63f35"]{--ink-color:#c63f35}
 .ink-color[data-ink-color="#3869a6"]{--ink-color:#3869a6}
-.ink-color[data-ink-color="#387252"]{--ink-color:#387252}
-.ink-color[data-ink-color="#e5bc35"]{--ink-color:#e5bc35}
 .ink-width-label{display:flex;align-items:center;gap:5px;flex:none;font-size:11px;color:#617064}
 .ink-width-label input{width:68px;accent-color:#405e49}
-.ink-save-status{font-size:10px;color:#79857a;padding-right:3px}
-@media(max-width:620px){.ink-toolbar{top:8px;left:8px;max-width:calc(100% - 16px);gap:6px}.ink-tool{padding:0 7px}.ink-save-status{display:none}}
+@media(max-width:620px){.ink-toolbar{top:8px;left:8px;max-width:calc(100% - 16px);gap:6px}}
 @media(max-width:420px){.topbar{padding:0 8px;gap:3px}.brand-name{font-size:14px}.view-actions{gap:0;margin-right:0}.view-actions .icon-button{width:26px}.zoom-value{min-width:29px;font-size:10px}.topbar-actions{gap:0}.topbar-actions>.icon-button{width:28px}.topbar-actions>.upload-button{min-width:28px;height:30px}}

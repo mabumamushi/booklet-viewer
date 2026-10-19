@@ -1,7 +1,7 @@
 
 import * as pdfjs from './vendor/pdf.min.mjs';
 import { makeReadingOrder, makeSpreads, spreadLabel, findSpreadIndex } from './page-model.js';
-import { clamp01, strokePath, findStrokeAt, readSavedPages } from './ink-model.js';
+import { clamp01, strokePath, findStrokeAt, readSavedPages } from './ink-model.js?v=20261019-ink2';
 import { loadInk, saveInk } from './ink-store.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
@@ -11,7 +11,7 @@ const ui = Object.fromEntries([
   'app','uploadButton','emptyUpload','fileInput','searchToggle','searchClose','searchPanel','searchForm','searchInput','searchSummary','searchResults',
   'documentInfo','documentName','documentMeta','viewActions','reader','emptyState','readerViewport','zoomShell','bookSurface','dropOverlay',
   'loadingOverlay','loadingText','toast','pagination','prevButton','nextButton','pageRange','positionLabel','rangeTooltip',
-  'zoomIn','zoomOut','zoomFit','zoomValue','inkToggle','exportButton','inkToolbar','inkWidth','inkUndo','inkRedo','inkSaveStatus'
+  'zoomIn','zoomOut','zoomFit','zoomValue','inkToggle','exportButton','inkToolbar','inkWidth','inkUndo','inkRedo'
 ].map(id => [id, $(id)]));
 
 const state = {
@@ -19,7 +19,7 @@ const state = {
   pageWidth: 340, pageHeight: 480, imageCache: new Map(), pendingImages: new Map(),
   navigationId: 0, loadId: 0, searchId: 0, imageEpoch: 0, isTurning: false, searchMatches: [], toastTimer: null, zoomTimer: null,
   originalBytes: null, documentId: null, annotations: new Map(), pageGeometry: new Map(),
-  inkMode: false, inkTool: 'pen', inkColor: '#c63f35', inkSize: 2, activeInk: null, lastPenAt: 0,
+  inkMode: false, inkTool: 'pen', inkColor: '#202020', inkSize: 2, activeInk: null, lastPenAt: 0,
   undoStack: [], redoStack: [], saveQueue: Promise.resolve(), exportBusy: false,
 };
 
@@ -370,7 +370,6 @@ async function openPdf(file) {
     state.activeInk = null;
     state.inkMode = false;
     state.lastPenAt = 0;
-    ui.inkSaveStatus.textContent = '端末内に自動保存';
     state.fileName = file.name;
     state.pageOrder = makeReadingOrder(pdf.numPages);
     state.spreads = makeSpreads(state.pageOrder);
@@ -453,11 +452,10 @@ function queueInkSave() {
   if (!state.documentId) return;
   const id = state.documentId;
   const pages = Object.fromEntries([...state.annotations].filter(([, strokes]) => strokes.length).map(([number, strokes]) => [number, cloneStrokes(strokes)]));
-  ui.inkSaveStatus.textContent = '保存中…';
-  state.saveQueue = state.saveQueue.then(() => saveInk(id, pages)).then(() => {
-    if (state.documentId === id) ui.inkSaveStatus.textContent = '端末内に保存済み';
-  }).catch(() => {
-    if (state.documentId === id) ui.inkSaveStatus.textContent = '自動保存できません';
+  state.saveQueue = state.saveQueue.then(() => saveInk(id, pages)).catch(() => {
+    if (state.documentId === id) {
+      showToast('書き込みを端末内に保存できませんでした。');
+    }
   });
 }
 
