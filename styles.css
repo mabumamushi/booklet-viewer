@@ -43,3 +43,40 @@
 @font-face{font-family:'Makinas 4 Flat';src:url('./assets/Makinas-4-Flat.otf') format('opentype');font-style:normal;font-weight:400;font-display:swap}
 html,body,button,input,textarea,select,.brand-name,.search-head h2,.empty-state h1{font-family:'Makinas 4 Flat',sans-serif}
 html{font-synthesis:weight}
+
+.search-head h2{margin:0}
+.search-summary:empty{display:none}
+
+/* 単ページと見開きの間では、中央のページを同じ位置から動かす。 */
+.boundary-scene{position:relative;width:calc(2 * var(--page-width));height:var(--page-height);perspective:2200px}
+.boundary-layer{position:absolute;inset:0;filter:drop-shadow(0 5px 10px #393d3426);will-change:transform,opacity}
+.boundary-layer.double{display:grid;grid-template-columns:repeat(2,var(--page-width))}
+.boundary-layer.single{display:flex;justify-content:center}
+.boundary-layer.double:after{content:'';position:absolute;left:calc(var(--page-width) - 5px);top:0;height:100%;width:10px;background:linear-gradient(90deg,#00000015,transparent 42%,#0000001a);pointer-events:none}
+.boundary-layer.source{z-index:2}
+.boundary-layer.target{z-index:1}
+.boundary-scene.spread-to-cover .target,.boundary-scene.spread-to-back .target{z-index:3}
+.boundary-scene.cover-to-spread .source{animation:boundary-cover-out .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.cover-to-spread .target{animation:boundary-spread-from-right .7s cubic-bezier(.22,.6,.25,1) both}
+.boundary-scene.spread-to-cover .source{animation:boundary-spread-to-right .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.spread-to-cover .target{animation:boundary-cover-in .7s cubic-bezier(.22,.6,.25,1) both}
+.boundary-scene.spread-to-back .source{animation:boundary-spread-to-left .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.spread-to-back .target{animation:boundary-back-in .7s cubic-bezier(.22,.6,.25,1) both}
+.boundary-scene.back-to-spread .source{animation:boundary-back-out .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.back-to-spread .target{animation:boundary-spread-from-left .7s cubic-bezier(.22,.6,.25,1) both}
+.boundary-scene.single-to-single.next .source{animation:boundary-single-left .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.single-to-single.next .target{animation:boundary-single-right .7s cubic-bezier(.22,.6,.25,1) both}
+.boundary-scene.single-to-single.previous .source{animation:boundary-single-right-out .7s cubic-bezier(.3,.03,.22,1) both}
+.boundary-scene.single-to-single.previous .target{animation:boundary-single-from-left .7s cubic-bezier(.22,.6,.25,1) both}
+@keyframes boundary-cover-out{0%,65%{opacity:1}to{transform:translateX(-25%) rotateY(-18deg);opacity:0}}
+@keyframes boundary-cover-in{from{transform:translateX(-25%) rotateY(-18deg);clip-path:inset(0 100% 0 0)}to{transform:translateX(0) rotateY(0);clip-path:inset(0)}}
+@keyframes boundary-spread-from-right{from{transform:translateX(15%);clip-path:inset(0 0 0 100%)}to{transform:translateX(0);clip-path:inset(0)}}
+@keyframes boundary-spread-to-right{0%,65%{opacity:1}to{transform:translateX(15%);opacity:0}}
+@keyframes boundary-spread-to-left{0%,65%{opacity:1}to{transform:translateX(-15%);opacity:0}}
+@keyframes boundary-back-in{from{transform:translateX(25%) rotateY(18deg);clip-path:inset(0 0 0 100%)}to{transform:translateX(0) rotateY(0);clip-path:inset(0)}}
+@keyframes boundary-back-out{0%,65%{opacity:1}to{transform:translateX(25%) rotateY(18deg);opacity:0}}
+@keyframes boundary-spread-from-left{from{transform:translateX(-15%);clip-path:inset(0 100% 0 0)}to{transform:translateX(0);clip-path:inset(0)}}
+@keyframes boundary-single-left{0%,65%{opacity:1}to{transform:translateX(-30%);opacity:0}}
+@keyframes boundary-single-right{from{transform:translateX(30%);clip-path:inset(0 0 0 100%)}to{transform:translateX(0);clip-path:inset(0)}}
+@keyframes boundary-single-right-out{0%,65%{opacity:1}to{transform:translateX(30%);opacity:0}}
+@keyframes boundary-single-from-left{from{transform:translateX(-30%);clip-path:inset(0 100% 0 0)}to{transform:translateX(0);clip-path:inset(0)}}
