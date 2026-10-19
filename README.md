@@ -26,7 +26,11 @@ python3 -m http.server 8000
 
 ## GitHub Pagesで公開する
 
-`npm install` の後に `npm run build` を実行すると、公開に必要な静的ファイルが `dist/` にまとまります。GitHub Pagesに公開する場合は、GitHub Actionsなどで `dist/` をデプロイします。非公開リポジトリでも、公開したWebサイト自体の閲覧範囲は別に確認してください。PDFファイルはリポジトリに追加する必要がありません。閲覧のため選択したPDFはGitHub Pages側には保存されません。
+公開サイト: https://mabumamushi.github.io/booklet-viewer/
+
+`main` ブランチへの変更を GitHub Actions が検証・ビルドし、`dist/` を GitHub Pages に公開します。GitHub の **Settings → Pages → Build and deployment** で **GitHub Actions** を公開元として選びます。GitHub Free を利用する場合は、リポジトリを **Public** にします。
+
+公開URLを共有すれば、相手はスマートフォンやPCからサイトを開けます。利用者は各自の端末でPDFを選択します。PDFファイルはリポジトリに追加せず、選択したPDFはGitHub Pages側にも保存されません。
 
 ## 構成
 
