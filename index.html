@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#f5f2ec" />
     <meta name="description" content="PDFを見開きとページめくりで確認できる、ブラウザー内の冊子プレビュー。" />
     <title>冊子Checker</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20261019-2" />
   </head>
   <body>
     <div class="app" id="app">
@@ -62,13 +62,12 @@
       </main>
 
       <aside class="search-panel" id="searchPanel" aria-label="PDF内を検索" hidden>
-        <div class="search-head"><div><span class="eyebrow">FIND IN DOCUMENT</span><h2>文字検索</h2></div><button class="icon-button" id="searchClose" type="button" aria-label="検索を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 19 19M19 5 5 19"/></svg></button></div>
-        <form id="searchForm" class="search-form"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="searchInput" type="search" placeholder="単語や文章を入力" autocomplete="off" aria-label="検索語" /><button type="submit">検索</button></form>
-        <p class="search-summary" id="searchSummary">PDF内の文字を検索できます。</p>
+        <div class="search-head"><h2>文字検索</h2><button class="icon-button" id="searchClose" type="button" aria-label="検索を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5 19 19M19 5 5 19"/></svg></button></div>
+        <form id="searchForm" class="search-form"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input id="searchInput" type="search" placeholder="入力" autocomplete="off" aria-label="検索語" /><button type="submit">検索</button></form>
+        <p class="search-summary" id="searchSummary" aria-live="polite"></p>
         <div class="search-results" id="searchResults"></div>
-        <p class="search-note">画像だけのPDFは、OCR済みでない限り検索できません。</p>
       </aside>
     </div>
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./main.js?v=20261019-2"></script>
   </body>
 </html>
