@@ -1,6 +1,8 @@
 
 import * as pdfjs from './vendor/pdf.min.mjs';
 import { makeReadingOrder, makeSpreads, spreadLabel, findSpreadIndex } from './page-model.js';
+import { clamp01, strokePath, findStrokeAt, readSavedPages } from './ink-model.js';
+import { loadInk, saveInk } from './ink-store.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
 
@@ -9,14 +11,19 @@ const ui = Object.fromEntries([
   'app','uploadButton','emptyUpload','fileInput','searchToggle','searchClose','searchPanel','searchForm','searchInput','searchSummary','searchResults',
   'documentInfo','documentName','documentMeta','viewActions','reader','emptyState','readerViewport','zoomShell','bookSurface','dropOverlay',
   'loadingOverlay','loadingText','toast','pagination','prevButton','nextButton','pageRange','positionLabel','rangeTooltip',
-  'zoomIn','zoomOut','zoomFit','zoomValue'
+  'zoomIn','zoomOut','zoomFit','zoomValue','inkToggle','exportButton','inkToolbar','inkWidth','inkUndo','inkRedo','inkSaveStatus'
 ].map(id => [id, $(id)]));
 
 const state = {
   pdf: null, fileName: '', pageOrder: [], spreads: [], currentIndex: 0, zoom: 1,
   pageWidth: 340, pageHeight: 480, imageCache: new Map(), pendingImages: new Map(),
   navigationId: 0, loadId: 0, searchId: 0, imageEpoch: 0, isTurning: false, searchMatches: [], toastTimer: null, zoomTimer: null,
+  originalBytes: null, documentId: null, annotations: new Map(), pageGeometry: new Map(),
+  inkMode: false, inkTool: 'pen', inkColor: '#c63f35', inkSize: 2, activeInk: null, lastPenAt: 0,
+  undoStack: [], redoStack: [], saveQueue: Promise.resolve(), exportBusy: false,
 };
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function showToast(message) {
   ui.toast.textContent = message;
@@ -60,6 +67,42 @@ function applyAnimationGeometry() {
   ui.zoomShell.style.height = `${state.pageHeight * state.zoom}px`;
 }
 
+function widthForTool(tool = state.inkTool) {
+  return tool === 'marker' ? 0.012 + state.inkSize * 0.004 : 0.0012 + state.inkSize * 0.0011;
+}
+
+function pageInkLayer(pageNumber) {
+  const geometry = state.pageGeometry.get(pageNumber);
+  if (!geometry) return null;
+  const scale = Math.min(state.pageWidth / geometry.width, state.pageHeight / geometry.height);
+  const width = geometry.width * scale;
+  const height = geometry.height * scale;
+  const aspect = geometry.height / geometry.width;
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.classList.add('ink-layer');
+  svg.dataset.page = String(pageNumber);
+  svg.style.left = `${(state.pageWidth - width) / 2}px`;
+  svg.style.top = `${(state.pageHeight - height) / 2}px`;
+  svg.style.width = `${width}px`;
+  svg.style.height = `${height}px`;
+  svg.setAttribute('viewBox', `0 0 1000 ${1000 * aspect}`);
+  svg.setAttribute('aria-label', `${pageNumber}ページの書き込み`);
+  for (const stroke of state.annotations.get(pageNumber) || []) svg.append(strokeNode(stroke, aspect));
+  return svg;
+}
+
+function strokeNode(stroke, aspect) {
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', strokePath(stroke, aspect));
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', stroke.color);
+  path.setAttribute('stroke-width', String(stroke.width * 1000));
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  if (stroke.tool === 'marker') path.setAttribute('stroke-opacity', '.28');
+  return path;
+}
+
 function pageNode(pageNumber, extraClass = '') {
   const page = document.createElement('div');
   page.className = `page ${extraClass}`.trim();
@@ -79,6 +122,8 @@ function pageNode(pageNumber, extraClass = '') {
   } else {
     page.classList.add('loading');
   }
+  const inkLayer = pageInkLayer(pageNumber);
+  if (inkLayer) page.append(inkLayer);
   const number = document.createElement('span');
   number.className = 'page-number';
   number.textContent = String(pageNumber);
@@ -108,6 +153,7 @@ async function imageFor(pageNumber) {
   const promise = (async () => {
     const page = await pdf.getPage(pageNumber);
     const unscaled = page.getViewport({ scale: 1 });
+    state.pageGeometry.set(pageNumber, { width: unscaled.width, height: unscaled.height });
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const scale = state.pageWidth * pixelRatio / unscaled.width;
     const viewport = page.getViewport({ scale });
@@ -218,7 +264,7 @@ function makeBoundaryScene(source, target, direction) {
 }
 
 async function navigate(index, animated = false) {
-  if (!state.pdf || index < 0 || index >= state.spreads.length) return;
+  if (!state.pdf || state.activeInk || index < 0 || index >= state.spreads.length) return;
   if (state.isTurning && animated) return;
   const from = state.currentIndex;
   if (index === from) return;
@@ -257,6 +303,7 @@ function updateZoom() {
 }
 
 function zoomTo(value) {
+  if (state.activeInk) return;
   const next = Math.max(0.6, Math.min(2.5, Math.round(value * 100) / 100));
   if (next === state.zoom) return;
   ui.readerViewport.classList.add('zoom-animating');
@@ -290,18 +337,40 @@ async function openPdf(file) {
   setLoading(true);
   try {
     const buffer = await file.arrayBuffer();
+    const originalBytes = new Uint8Array(buffer);
+    let documentId = '';
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', originalBytes);
+      documentId = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    } catch { /* 古いブラウザーではPDF.jsの識別子を使う。 */ }
     const task = pdfjs.getDocument({
-      data: new Uint8Array(buffer),
+      data: originalBytes.slice(),
       cMapUrl: new URL('./vendor/cmaps/', import.meta.url).href,
       cMapPacked: true,
       standardFontDataUrl: new URL('./vendor/standard_fonts/', import.meta.url).href,
     });
     const pdf = await task.promise;
     if (id !== state.loadId) { await pdf.destroy(); return; }
+    documentId ||= `${pdf.fingerprints?.[0] || file.name}:${file.size}`;
+    let savedPages = {};
+    try { savedPages = await loadInk(documentId); }
+    catch { showToast('端末内の書き込みを読み込めませんでした。'); }
+    if (id !== state.loadId) { await pdf.destroy(); return; }
+    await state.saveQueue;
     const old = state.pdf;
     state.pdf = pdf;
     if (old) await old.destroy();
     clearImages();
+    state.pageGeometry.clear();
+    state.originalBytes = originalBytes;
+    state.documentId = documentId;
+    state.annotations = readSavedPages(savedPages, pdf.numPages);
+    state.undoStack = [];
+    state.redoStack = [];
+    state.activeInk = null;
+    state.inkMode = false;
+    state.lastPenAt = 0;
+    ui.inkSaveStatus.textContent = '端末内に自動保存';
     state.fileName = file.name;
     state.pageOrder = makeReadingOrder(pdf.numPages);
     state.spreads = makeSpreads(state.pageOrder);
@@ -318,6 +387,7 @@ async function openPdf(file) {
     ui.viewActions.hidden = false;
     ui.pagination.hidden = false;
     ui.searchToggle.disabled = false;
+    updateInkUi();
     ui.documentName.textContent = file.name.replace(/\.pdf$/i, '');
     ui.documentMeta.textContent = `${pdf.numPages}ページ · ${formatSize(file.size)}`;
     ui.searchPanel.hidden = true;
@@ -346,6 +416,99 @@ async function openPdf(file) {
 
 function formatSize(bytes) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+}
+
+function cloneStrokes(strokes) {
+  return strokes.map(stroke => ({ ...stroke, points: stroke.points.map(point => ({ ...point })) }));
+}
+
+function hasAnnotations() {
+  return [...state.annotations.values()].some(strokes => strokes.length > 0);
+}
+
+function updateInkUi() {
+  ui.inkToggle.disabled = !state.pdf;
+  ui.inkToggle.setAttribute('aria-pressed', String(state.inkMode));
+  ui.inkToggle.setAttribute('aria-label', state.inkMode ? '書き込みを終了' : '書き込みを開始');
+  ui.inkToggle.title = state.inkMode ? '書き込みを終了' : '書き込みを開始';
+  ui.inkToolbar.hidden = !state.inkMode;
+  ui.app.classList.toggle('ink-mode', state.inkMode);
+  ui.exportButton.disabled = !state.pdf || !hasAnnotations() || state.exportBusy;
+  ui.inkUndo.disabled = state.undoStack.length === 0;
+  ui.inkRedo.disabled = state.redoStack.length === 0;
+  ui.inkWidth.disabled = state.inkTool === 'eraser';
+  for (const button of ui.inkToolbar.querySelectorAll('[data-ink-tool]')) {
+    const selected = button.dataset.inkTool === state.inkTool;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+  for (const button of ui.inkToolbar.querySelectorAll('[data-ink-color]')) {
+    const selected = button.dataset.inkColor === state.inkColor;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  }
+}
+
+function queueInkSave() {
+  if (!state.documentId) return;
+  const id = state.documentId;
+  const pages = Object.fromEntries([...state.annotations].filter(([, strokes]) => strokes.length).map(([number, strokes]) => [number, cloneStrokes(strokes)]));
+  ui.inkSaveStatus.textContent = '保存中…';
+  state.saveQueue = state.saveQueue.then(() => saveInk(id, pages)).then(() => {
+    if (state.documentId === id) ui.inkSaveStatus.textContent = '端末内に保存済み';
+  }).catch(() => {
+    if (state.documentId === id) ui.inkSaveStatus.textContent = '自動保存できません';
+  });
+}
+
+function commitInkChange(pageNumber, before) {
+  const after = cloneStrokes(state.annotations.get(pageNumber) || []);
+  if (JSON.stringify(before) === JSON.stringify(after)) return;
+  state.undoStack.push({ pageNumber, before, after });
+  if (state.undoStack.length > 80) state.undoStack.shift();
+  state.redoStack = [];
+  updateInkUi();
+  queueInkSave();
+}
+
+function applyInkHistory(from, to, key) {
+  const change = from.pop();
+  if (!change) return;
+  state.annotations.set(change.pageNumber, cloneStrokes(change[key]));
+  to.push(change);
+  renderSpread(state.currentIndex);
+  updateInkUi();
+  queueInkSave();
+}
+
+async function exportMarkedPdf() {
+  if (!state.pdf || !hasAnnotations() || state.exportBusy) return;
+  state.exportBusy = true;
+  updateInkUi();
+  setLoading(true, '書き込み済みPDFを作成中…');
+  const documentId = state.documentId;
+  try {
+    await state.saveQueue;
+    const { makeMarkedPdf } = await import('./ink-export.js');
+    const bytes = await makeMarkedPdf(state.originalBytes, state.annotations, state.pdf);
+    if (documentId !== state.documentId) return;
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${state.fileName.replace(/\.pdf$/i, '')}-marked.pdf`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showToast('書き込み済みPDFを保存しました。');
+  } catch (error) {
+    showToast(`PDFを書き出せませんでした: ${error.message}`);
+  } finally {
+    state.exportBusy = false;
+    setLoading(false);
+    updateInkUi();
+  }
 }
 
 function showRangeTooltip(index) {
@@ -442,9 +605,104 @@ ui.pageRange.addEventListener('blur', () => { ui.rangeTooltip.hidden = true; });
 ui.searchToggle.addEventListener('click', () => setSearchOpen(ui.searchPanel.hidden));
 ui.searchClose.addEventListener('click', () => setSearchOpen(false));
 ui.searchForm.addEventListener('submit', event => { event.preventDefault(); searchDocument(ui.searchInput.value); });
+ui.inkToggle.addEventListener('click', () => {
+  if (!state.pdf || state.activeInk) return;
+  if (!state.inkMode && !ui.searchPanel.hidden) setSearchOpen(false);
+  state.inkMode = !state.inkMode;
+  updateInkUi();
+});
+ui.exportButton.addEventListener('click', exportMarkedPdf);
+ui.inkUndo.addEventListener('click', () => applyInkHistory(state.undoStack, state.redoStack, 'before'));
+ui.inkRedo.addEventListener('click', () => applyInkHistory(state.redoStack, state.undoStack, 'after'));
+ui.inkWidth.addEventListener('input', () => { state.inkSize = Number(ui.inkWidth.value); });
+ui.inkToolbar.addEventListener('click', event => {
+  const tool = event.target.closest('[data-ink-tool]');
+  const color = event.target.closest('[data-ink-color]');
+  if (tool) state.inkTool = tool.dataset.inkTool;
+  if (color) state.inkColor = color.dataset.inkColor;
+  if (tool || color) updateInkUi();
+});
+
+function inkPoint(layer, event) {
+  const rect = layer.getBoundingClientRect();
+  return { x: clamp01((event.clientX - rect.left) / rect.width), y: clamp01((event.clientY - rect.top) / rect.height) };
+}
+
+function addInkPoint(active, event) {
+  const point = inkPoint(active.layer, event);
+  const points = active.stroke.points;
+  const previous = points[points.length - 1];
+  if (previous && Math.hypot(point.x - previous.x, point.y - previous.y) < 0.0005) return;
+  points.push(point);
+  active.path.setAttribute('d', strokePath(active.stroke, active.aspect));
+}
+
+function eraseAtPointer(active, event) {
+  const strokes = state.annotations.get(active.pageNumber) || [];
+  const index = findStrokeAt(strokes, inkPoint(active.layer, event), active.aspect);
+  if (index < 0) return;
+  strokes.splice(index, 1);
+  active.layer.querySelectorAll('path')[index]?.remove();
+  state.annotations.set(active.pageNumber, strokes);
+}
+
+ui.bookSurface.addEventListener('pointerdown', event => {
+  const layer = event.target.closest?.('.ink-layer');
+  if (!state.inkMode || !state.pdf || state.isTurning || state.activeInk || !layer) return;
+  if (event.pointerType === 'touch' || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  event.preventDefault();
+  const pageNumber = Number(layer.dataset.page);
+  const aspect = state.pageGeometry.get(pageNumber).height / state.pageGeometry.get(pageNumber).width;
+  const active = {
+    pointerId: event.pointerId, pageNumber, layer, aspect,
+    before: cloneStrokes(state.annotations.get(pageNumber) || []),
+  };
+  if (state.inkTool === 'eraser') {
+    active.eraser = true;
+    eraseAtPointer(active, event);
+  } else {
+    active.stroke = { tool: state.inkTool, color: state.inkColor, width: widthForTool(), points: [] };
+    active.path = strokeNode(active.stroke, aspect);
+    layer.append(active.path);
+    addInkPoint(active, event);
+  }
+  state.activeInk = active;
+  if (event.pointerType === 'pen') state.lastPenAt = Date.now();
+  layer.setPointerCapture?.(event.pointerId);
+});
+
+ui.bookSurface.addEventListener('pointermove', event => {
+  const active = state.activeInk;
+  if (!active || active.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  if (event.pointerType === 'pen') state.lastPenAt = Date.now();
+  if (active.eraser) eraseAtPointer(active, event);
+  else {
+    const samples = event.getCoalescedEvents?.() || [];
+    for (const sample of samples.length ? samples : [event]) addInkPoint(active, sample);
+  }
+});
+
+function finishInk(event) {
+  const active = state.activeInk;
+  if (!active || active.pointerId !== event.pointerId) return;
+  event.preventDefault();
+  if (!active.eraser) {
+    addInkPoint(active, event);
+    const strokes = state.annotations.get(active.pageNumber) || [];
+    strokes.push(active.stroke);
+    state.annotations.set(active.pageNumber, strokes);
+  }
+  if (event.pointerType === 'pen') state.lastPenAt = Date.now();
+  state.activeInk = null;
+  commitInkChange(active.pageNumber, active.before);
+  renderSpread(state.currentIndex);
+}
+ui.bookSurface.addEventListener('pointerup', finishInk);
+ui.bookSurface.addEventListener('pointercancel', finishInk);
 
 function finishSwipe(start, x, y) {
-  if (!start || !state.pdf || state.zoom > 1 || state.isTurning) return;
+  if (!start || !state.pdf || state.zoom > 1 || state.isTurning || state.activeInk || (state.inkMode && Date.now() - state.lastPenAt < 400)) return;
   const deltaX = x - start.x;
   const deltaY = y - start.y;
   const threshold = Math.min(80, Math.max(55, ui.readerViewport.clientWidth * 0.12));
@@ -453,26 +711,37 @@ function finishSwipe(start, x, y) {
 }
 
 let touchStart = null;
+let touchPan = null;
 ui.readerViewport.addEventListener('touchstart', event => {
-  touchStart = event.touches.length === 1 && state.zoom <= 1
+  const canUseFinger = !state.activeInk && Date.now() - state.lastPenAt > 400;
+  touchStart = canUseFinger && event.touches.length === 1 && state.zoom <= 1
     ? { x: event.touches[0].clientX, y: event.touches[0].clientY }
+    : null;
+  touchPan = canUseFinger && state.inkMode && state.zoom > 1 && event.touches.length === 1
+    ? { x: event.touches[0].clientX, y: event.touches[0].clientY, left: ui.readerViewport.scrollLeft, top: ui.readerViewport.scrollTop }
     : null;
 }, { passive: true });
 ui.readerViewport.addEventListener('touchmove', event => {
-  if (event.touches.length !== 1) touchStart = null;
-}, { passive: true });
+  if (event.touches.length !== 1) { touchStart = null; touchPan = null; return; }
+  if (touchPan) {
+    event.preventDefault();
+    ui.readerViewport.scrollLeft = touchPan.left - (event.touches[0].clientX - touchPan.x);
+    ui.readerViewport.scrollTop = touchPan.top - (event.touches[0].clientY - touchPan.y);
+  }
+}, { passive: false });
 ui.readerViewport.addEventListener('touchend', event => {
   if (event.changedTouches.length === 1) finishSwipe(touchStart, event.changedTouches[0].clientX, event.changedTouches[0].clientY);
   touchStart = null;
+  touchPan = null;
 }, { passive: true });
-ui.readerViewport.addEventListener('touchcancel', () => { touchStart = null; });
+ui.readerViewport.addEventListener('touchcancel', () => { touchStart = null; touchPan = null; });
 
 let mouseStart = null;
 ui.readerViewport.addEventListener('pointerdown', event => {
-  if (event.pointerType === 'mouse' && event.button === 0) mouseStart = { x: event.clientX, y: event.clientY };
+  if (!state.inkMode && event.pointerType === 'mouse' && event.button === 0) mouseStart = { x: event.clientX, y: event.clientY };
 });
 ui.readerViewport.addEventListener('pointerup', event => {
-  if (event.pointerType === 'mouse') finishSwipe(mouseStart, event.clientX, event.clientY);
+  if (!state.inkMode && event.pointerType === 'mouse') finishSwipe(mouseStart, event.clientX, event.clientY);
   mouseStart = null;
 });
 ui.readerViewport.addEventListener('pointercancel', () => { mouseStart = null; });
@@ -499,6 +768,12 @@ document.addEventListener('keydown', event => {
     event.preventDefault(); setSearchOpen(true); return;
   }
   if (event.target instanceof HTMLInputElement) return;
+  if (state.inkMode && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    event.preventDefault();
+    if (event.shiftKey) applyInkHistory(state.redoStack, state.undoStack, 'after');
+    else applyInkHistory(state.undoStack, state.redoStack, 'before');
+    return;
+  }
   if (event.key === 'ArrowRight') { event.preventDefault(); navigate(state.currentIndex + 1, true); }
   if (event.key === 'ArrowLeft') { event.preventDefault(); navigate(state.currentIndex - 1, true); }
   if (event.key === 'Home') { event.preventDefault(); navigate(0, false); }

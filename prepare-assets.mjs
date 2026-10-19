@@ -15,4 +15,6 @@ for (const [source, target] of [
 ]) {
   cpSync(resolve(from, source), resolve(to, target), { recursive: true, force: true });
 }
+cpSync(resolve(root, 'node_modules/pdf-lib/dist/pdf-lib.esm.min.js'), resolve(to, 'pdf-lib.esm.min.js'));
+cpSync(resolve(root, 'node_modules/pdf-lib/LICENSE.md'), resolve(to, 'PDF-LIB-LICENSE.md'));
 console.log('PDF.js assets copied to vendor/');

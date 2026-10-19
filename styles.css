@@ -80,3 +80,29 @@ html{font-synthesis:weight}
 @keyframes boundary-single-right{from{transform:translateX(30%);clip-path:inset(0 0 0 100%)}to{transform:translateX(0);clip-path:inset(0)}}
 @keyframes boundary-single-right-out{0%,65%{opacity:1}to{transform:translateX(30%);opacity:0}}
 @keyframes boundary-single-from-left{from{transform:translateX(-30%);clip-path:inset(0 100% 0 0)}to{transform:translateX(0);clip-path:inset(0)}}
+
+/* 書き込みはPDFページと一緒に拡大・ページめくりされる。 */
+.ink-layer{position:absolute;z-index:1;overflow:hidden;pointer-events:none;user-select:none}
+.ink-layer path{pointer-events:none}
+.app.ink-mode .spread .ink-layer{pointer-events:all;touch-action:none;cursor:crosshair}
+.animation-scene .ink-layer,.boundary-scene .ink-layer{pointer-events:none!important}
+#inkToggle[aria-pressed="true"]{background:#dfeadd;color:#31583c}
+.ink-toolbar{position:absolute;top:12px;left:12px;z-index:6;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);min-height:48px;padding:5px 8px;background:#fffdf9f2;border:1px solid #dce3d8;border-radius:10px;box-shadow:0 5px 20px #24362722;overflow-x:auto;white-space:nowrap;backdrop-filter:blur(8px)}
+.ink-tool-group,.ink-colors{display:flex;align-items:center;gap:3px;flex:none}
+.ink-tool,.ink-action{height:34px;border:0;border-radius:7px;background:transparent;color:#47584a;font-size:12px;padding:0 10px}
+.ink-tool.active{background:#405e49;color:white}
+.ink-tool:disabled,.ink-action:disabled{opacity:.4}
+.ink-action{font-size:23px;min-width:35px;padding:0}
+.ink-action:hover:not(:disabled),.ink-tool:hover:not(.active){background:#e9eee8}
+.ink-colors{padding:0 4px;border-left:1px solid #e3e8df}
+.ink-color{width:27px;height:27px;margin:0 2px;border:2px solid white;border-radius:50%;background:var(--ink-color);box-shadow:0 0 0 1px #cfd8cd}
+.ink-color.selected{box-shadow:0 0 0 2px #385d42}
+.ink-color[data-ink-color="#c63f35"]{--ink-color:#c63f35}
+.ink-color[data-ink-color="#3869a6"]{--ink-color:#3869a6}
+.ink-color[data-ink-color="#387252"]{--ink-color:#387252}
+.ink-color[data-ink-color="#e5bc35"]{--ink-color:#e5bc35}
+.ink-width-label{display:flex;align-items:center;gap:5px;flex:none;font-size:11px;color:#617064}
+.ink-width-label input{width:68px;accent-color:#405e49}
+.ink-save-status{font-size:10px;color:#79857a;padding-right:3px}
+@media(max-width:620px){.ink-toolbar{top:8px;left:8px;max-width:calc(100% - 16px);gap:6px}.ink-tool{padding:0 7px}.ink-save-status{display:none}}
+@media(max-width:420px){.topbar{padding:0 8px;gap:3px}.brand-name{font-size:14px}.view-actions{gap:0;margin-right:0}.view-actions .icon-button{width:26px}.zoom-value{min-width:29px;font-size:10px}.topbar-actions{gap:0}.topbar-actions>.icon-button{width:28px}.topbar-actions>.upload-button{min-width:28px;height:30px}}

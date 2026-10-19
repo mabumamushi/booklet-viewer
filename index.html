@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#f5f2ec" />
     <meta name="description" content="PDFを見開きとページめくりで確認できる、ブラウザー内の冊子プレビュー。" />
     <title>冊子Checker</title>
-    <link rel="stylesheet" href="./styles.css?v=20261019-2" />
+    <link rel="stylesheet" href="./styles.css?v=20261019-ink1" />
   </head>
   <body>
     <div class="app" id="app">
@@ -30,6 +30,8 @@
           <button class="icon-button search-toggle" id="searchToggle" type="button" aria-label="文字を検索" title="文字を検索" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
           </button>
+          <button class="icon-button" id="inkToggle" type="button" aria-label="書き込みを開始" title="書き込みを開始" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10-3.5-3.5-10 10L4 20zM13.5 7l3.5 3.5M16 4l2-2 4 4-2 2"/></svg></button>
+          <button class="icon-button" id="exportButton" type="button" aria-label="書き込み済みPDFを保存" title="書き込み済みPDFを保存" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></svg></button>
           <button class="icon-button upload-button" id="uploadButton" type="button" aria-label="PDFファイルを開く" title="PDFファイルを開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h9l5 5v13H5zM14 3v5h5"/></svg></button>
           <input id="fileInput" type="file" accept="application/pdf,.pdf" hidden />
         </div>
@@ -42,6 +44,25 @@
           </div>
           <div class="reader-viewport" id="readerViewport" hidden>
             <div class="zoom-shell" id="zoomShell"><div class="book-surface" id="bookSurface"></div></div>
+          </div>
+          <div class="ink-toolbar" id="inkToolbar" role="toolbar" aria-label="書き込みツール" hidden>
+            <div class="ink-tool-group" role="group" aria-label="描画方法">
+              <button class="ink-tool active" type="button" data-ink-tool="pen" aria-pressed="true">ペン</button>
+              <button class="ink-tool" type="button" data-ink-tool="marker" aria-pressed="false">マーカー</button>
+              <button class="ink-tool" type="button" data-ink-tool="eraser" aria-pressed="false">消しゴム</button>
+            </div>
+            <div class="ink-colors" role="group" aria-label="線の色">
+              <button type="button" class="ink-color selected" data-ink-color="#c63f35" aria-label="赤" aria-pressed="true"></button>
+              <button type="button" class="ink-color" data-ink-color="#3869a6" aria-label="青" aria-pressed="false"></button>
+              <button type="button" class="ink-color" data-ink-color="#387252" aria-label="緑" aria-pressed="false"></button>
+              <button type="button" class="ink-color" data-ink-color="#e5bc35" aria-label="黄" aria-pressed="false"></button>
+            </div>
+            <label class="ink-width-label">太さ <input id="inkWidth" type="range" min="1" max="5" value="2" aria-label="線の太さ" /></label>
+            <div class="ink-tool-group" role="group" aria-label="操作">
+              <button class="ink-action" id="inkUndo" type="button" aria-label="書き込みを元に戻す" title="元に戻す" disabled>↶</button>
+              <button class="ink-action" id="inkRedo" type="button" aria-label="書き込みをやり直す" title="やり直す" disabled>↷</button>
+            </div>
+            <span class="ink-save-status" id="inkSaveStatus">端末内に自動保存</span>
           </div>
           <div class="drop-overlay" id="dropOverlay" hidden><span>ここにPDFをドロップ</span></div>
           <div class="loading-overlay" id="loadingOverlay" hidden><span class="spinner"></span><span id="loadingText">PDFを読み込み中…</span></div>
@@ -68,6 +89,6 @@
         <div class="search-results" id="searchResults"></div>
       </aside>
     </div>
-    <script type="module" src="./main.js?v=20261019-2"></script>
+    <script type="module" src="./main.js?v=20261019-ink1"></script>
   </body>
 </html>
